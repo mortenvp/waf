@@ -10,7 +10,7 @@ Provides default and command-line options, as well the command
 that reads the ``options`` wscript function.
 """
 
-import os, tempfile, optparse, sys, re
+import os, tempfile, argparse, sys, re, functools
 from waflib import Logs, Utils, Context, Errors
 
 options = {}
@@ -38,14 +38,18 @@ lockfile = os.environ.get('WAFLOCK', '.lock-waf_%s_build' % sys.platform)
 Name of the lock file that marks a project as configured
 """
 
-class opt_parser(optparse.OptionParser):
+class opt_parser(argparse.ArgumentParser):
 	"""
 	Command-line options parser.
 	"""
 	def __init__(self, ctx):
-		optparse.OptionParser.__init__(self, conflict_handler="resolve",
-			version='waf %s (%s)' % (Context.WAFVERSION, Context.WAFREVISION))
-		self.formatter.width = Logs.get_term_cols()
+
+		usage = self.get_usage()
+
+		argparse.ArgumentParser.__init__(self, conflict_handler="resolve",
+			version='waf %s (%s)' % (Context.WAFVERSION, Context.WAFREVISION),
+			usage=usage)
+		#self.formatter.width = Logs.get_term_cols()
 		self.ctx = ctx
 
 	def print_usage(self, file=None):
@@ -109,11 +113,14 @@ class OptionsContext(Context.Context):
 		p = self.add_option
 		color = os.environ.get('NOCOLOR', '') and 'no' or 'auto'
 		p('-c', '--color',    dest='colors',  default=color, action='store', help='whether to use colors (yes/no/auto) [default: auto]', choices=('yes', 'no', 'auto'))
-		p('-j', '--jobs',     dest='jobs',    default=jobs,  type='int', help='amount of parallel jobs (%r)' % jobs)
+		p('-j', '--jobs',     dest='jobs',    default=jobs,  type=int, help='amount of parallel jobs (%r)' % jobs)
 		p('-k', '--keep',     dest='keep',    default=0,     action='count', help='continue despite errors (-kk to try harder)')
 		p('-v', '--verbose',  dest='verbose', default=0,     action='count', help='verbosity level -v -vv or -vvv [default: 0]')
 		p('--zones',          dest='zones',   default='',    action='store', help='debugging zones (task_gen, deps, tasks, etc)')
-		p('--profile',        dest='profile', default='',    action='store_true', help=optparse.SUPPRESS_HELP)
+		p('--profile',        dest='profile', default='',    action='store_true', help=argparse.SUPPRESS)
+
+		# Collect the commands and environment variables
+		p('args', nargs='*')
 
 		gr = self.add_option_group('Configuration options')
 		self.option_groups['configure options'] = gr
@@ -121,9 +128,9 @@ class OptionsContext(Context.Context):
 		gr.add_option('-o', '--out', action='store', default='', help='build dir for the project', dest='out')
 		gr.add_option('-t', '--top', action='store', default='', help='src dir for the project', dest='top')
 
-		gr.add_option('--no-lock-in-run', action='store_true', default='', help=optparse.SUPPRESS_HELP, dest='no_lock_in_run')
-		gr.add_option('--no-lock-in-out', action='store_true', default='', help=optparse.SUPPRESS_HELP, dest='no_lock_in_out')
-		gr.add_option('--no-lock-in-top', action='store_true', default='', help=optparse.SUPPRESS_HELP, dest='no_lock_in_top')
+		gr.add_option('--no-lock-in-run', action='store_true', default='', help=argparse.SUPPRESS, dest='no_lock_in_run')
+		gr.add_option('--no-lock-in-out', action='store_true', default='', help=argparse.SUPPRESS, dest='no_lock_in_out')
+		gr.add_option('--no-lock-in-top', action='store_true', default='', help=argparse.SUPPRESS, dest='no_lock_in_top')
 
 		default_prefix = getattr(Context.g_module, 'default_prefix', os.environ.get('PREFIX'))
 		if not default_prefix:
@@ -201,7 +208,7 @@ class OptionsContext(Context.Context):
 
 		:rtype: optparse option object
 		"""
-		return self.parser.add_option(*k, **kw)
+		return self.parser.add_argument(*k, **kw)
 
 	def add_option_group(self, *k, **kw):
 		"""
@@ -216,7 +223,15 @@ class OptionsContext(Context.Context):
 		try:
 			gr = self.option_groups[k[0]]
 		except KeyError:
-			gr = self.parser.add_option_group(*k, **kw)
+			gr = self.parser.add_argument_group(*k, **kw)
+
+			# argparse does not have an add_option(...) method instead we use
+			# add_argument(...), to remain backwards compatible with existing
+			# tools and wscripts we keep this functionality.
+			def add_option(self, *k, **kw):
+				self.add_argument(*k, **kw)
+
+			gr.add_option = functools.partial(add_option, gr)
 		self.option_groups[k[0]] = gr
 		return gr
 
@@ -247,9 +262,9 @@ class OptionsContext(Context.Context):
 		:type _args: list of strings
 		"""
 		global options, commands, envvars
-		(options, leftover_args) = self.parser.parse_args(args=_args)
+		options = self.parser.parse_args(args=_args)
 
-		for arg in leftover_args:
+		for arg in options.args:
 			if '=' in arg:
 				envvars.append(arg)
 			else:
@@ -271,4 +286,3 @@ class OptionsContext(Context.Context):
 		super(OptionsContext, self).execute()
 		self.parse_args()
 		Utils.alloc_process_pool(options.jobs)
-
