@@ -49,7 +49,7 @@ class opt_parser(argparse.ArgumentParser):
 		argparse.ArgumentParser.__init__(self, conflict_handler="resolve",
 			version='waf %s (%s)' % (Context.WAFVERSION, Context.WAFREVISION),
 			usage=usage)
-		#self.formatter.width = Logs.get_term_cols()
+
 		self.ctx = ctx
 
 	def print_usage(self, file=None):
