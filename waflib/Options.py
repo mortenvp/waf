@@ -114,6 +114,7 @@ class OptionsContext(Context.Context):
 		p('-v', '--verbose',  dest='verbose', default=0,     action='count', help='verbosity level -v -vv or -vvv [default: 0]')
 		p('--zones',          dest='zones',   default='',    action='store', help='debugging zones (task_gen, deps, tasks, etc)')
 		p('--profile',        dest='profile', default='',    action='store_true', help=optparse.SUPPRESS_HELP)
+		p('--print-failure-log', dest='print_failure_log', default='', action='store_true', help='On failure print log file.')
 
 		gr = self.add_option_group('Configuration options')
 		self.option_groups['configure options'] = gr

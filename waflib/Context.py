@@ -9,6 +9,7 @@ Classes and functions enabling the command system
 import os, re, imp, sys
 from waflib import Utils, Errors, Logs
 import waflib.Node
+import waflib.Options
 
 # the following 3 constants are updated on each new release (do not touch)
 HEXVERSION=0x1090800
@@ -478,10 +479,18 @@ class Context(ctx):
 		"""
 		if self.logger:
 			self.logger.info('from %s: %s' % (self.path.abspath(), msg))
+		
 		try:
-			msg = '%s\n(complete log in %s)' % (msg, self.logger.handlers[0].baseFilename)
+			logfile = self.logger.handlers[0].baseFilename
 		except AttributeError:
-			pass
+			logfile = None
+			
+		if logfile and waflib.Options.options.print_failure_log:
+			with open(logfile, 'r') as f:
+				msg = '%s\nLog from (%s):\n%s\n' % (msg, logfile, f.read())
+		elif logfile:
+			msg = '%s\n(complete log in %s)' % (msg, logfile)
+			
 		raise self.errors.ConfigurationError(msg, ex=ex)
 
 	def to_log(self, msg):
